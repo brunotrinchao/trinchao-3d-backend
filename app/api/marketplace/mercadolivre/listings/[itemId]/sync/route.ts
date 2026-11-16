@@ -16,18 +16,71 @@ export { OPTIONS } from '@/lib/cors'
 
 type Context = { params: Promise<{ itemId: string }> }
 
-/** "HxLxC,gramas" — mesmo formato que o publish escreve. Nem todo item devolve isso na leitura. */
-function parseDimensions(raw: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } {
-  const fallback = { heightCm: 1, widthCm: 1, lengthCm: 1, weightGrams: 1 }
-  if (typeof raw !== 'string') return fallback
-  const match = raw.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/)
-  if (!match) return fallback
-  const [, h, w, l, g] = match
+/** "HxLxC,gramas" — mesmo formato que o publish escreve. Nem todo item devolve isso na leitura.
+ * Fallback: dims do PRODUTO (HEIGHT/WIDTH/LENGTH/WEIGHT attributes), depois SELLER_PACKAGE_*. */
+function parseDimensions(raw: unknown, attributes?: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } {
+  if (typeof raw === 'string') {
+    const match = raw.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/)
+    if (match) {
+      const [, h, w, l, g] = match
+      return {
+        heightCm: Math.max(1, Math.round(Number(h))),
+        widthCm: Math.max(1, Math.round(Number(w))),
+        lengthCm: Math.max(1, Math.round(Number(l))),
+        weightGrams: Math.max(1, Math.round(Number(g))),
+      }
+    }
+  }
+  // Fallback 1: dims do PRODUTO (especificações físicas)
+  const fromSpecs = dimsFromProductSpecs(attributes)
+  if (fromSpecs && (fromSpecs.heightCm > 0 || fromSpecs.widthCm > 0 || fromSpecs.lengthCm > 0)) return fromSpecs
+  // Fallback 2: SELLER_PACKAGE_* (embalagem)
+  const fromAttrs = dimensionsFromAttributes(attributes)
+  if (fromAttrs.weightGrams > 1 || fromAttrs.heightCm > 1) return fromAttrs
+  return { heightCm: 1, widthCm: 1, lengthCm: 1, weightGrams: 1 }
+}
+
+/** Dimensoes do PRODUTO: atributos HEIGHT/WIDTH/LENGTH/WEIGHT (especificações físicas). */
+function dimsFromProductSpecs(attributes: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } | null {
+  if (!Array.isArray(attributes)) return null
+  const list = attributes as Array<Record<string, unknown>>
+  const numberFor = (id: string): number => {
+    const attr = list.find((a) => a.id === id)
+    if (!attr) return 0
+    const struct = (attr?.values as Array<Record<string, unknown>> | undefined)?.[0]?.struct as
+      | Record<string, unknown>
+      | undefined
+    const n = Number(struct?.number)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  const result = {
+    heightCm: numberFor('HEIGHT'),
+    widthCm: numberFor('WIDTH'),
+    lengthCm: numberFor('LENGTH'),
+    weightGrams: numberFor('WEIGHT'),
+  }
+  return result.heightCm > 0 || result.widthCm > 0 || result.lengthCm > 0 ? result : null
+}
+
+/** Extrai dimensoes de embalagem dos atributos SELLER_PACKAGE_* do item ML. */
+function dimensionsFromAttributes(attributes: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } {
+  const zero = { heightCm: 0, widthCm: 0, lengthCm: 0, weightGrams: 0 }
+  if (!Array.isArray(attributes)) return zero
+  const list = attributes as Array<Record<string, unknown>>
+  const numberFor = (id: string): number => {
+    const attr = list.find((a) => a.id === id)
+    if (!attr) return 0
+    const struct = (attr?.values as Array<Record<string, unknown>> | undefined)?.[0]?.struct as
+      | Record<string, unknown>
+      | undefined
+    const n = Number(struct?.number)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
   return {
-    heightCm: Math.max(1, Math.round(Number(h))),
-    widthCm: Math.max(1, Math.round(Number(w))),
-    lengthCm: Math.max(1, Math.round(Number(l))),
-    weightGrams: Math.max(1, Math.round(Number(g))),
+    heightCm: numberFor('SELLER_PACKAGE_HEIGHT'),
+    widthCm: numberFor('SELLER_PACKAGE_WIDTH'),
+    lengthCm: numberFor('SELLER_PACKAGE_LENGTH'),
+    weightGrams: numberFor('SELLER_PACKAGE_WEIGHT'),
   }
 }
 
@@ -123,7 +176,9 @@ export async function POST(_request: Request, { params }: Context) {
       const product = await prisma.$transaction(async (tx) => {
         // Anúncio ML sem dimensões (shipping.dimensions null) → não mexe nas locais.
         const shipping = item.shipping as Record<string, unknown> | undefined
-        const dims = shipping?.dimensions ? parseDimensions(shipping.dimensions) : null
+        const rawDims = parseDimensions(shipping?.dimensions, item.attributes)
+        // Fallback 1x1x1x1 = ML não tem dims → não sobrescreve as locais
+        const dims = rawDims.weightGrams === 1 && rawDims.heightCm === 1 ? null : rawDims
         const listingTypeId = String(item.listing_type_id ?? '')
         const freeShipping = shipping?.free_shipping === false ? false : null
         const updated = await tx.product.update({
@@ -181,7 +236,7 @@ export async function POST(_request: Request, { params }: Context) {
     const description = await mlGetItemDescription(credential.accessToken, itemId)
     const categoryId = String(item.category_id ?? '')
     const categoryPath = categoryId ? await mlCategoryPath(categoryId) : ''
-    const dims = parseDimensions((item.shipping as Record<string, unknown> | undefined)?.dimensions)
+    const dims = parseDimensions((item.shipping as Record<string, unknown> | undefined)?.dimensions, item.attributes)
     const listingTypeId = String(item.listing_type_id ?? '')
     const shipping = item.shipping as Record<string, unknown> | undefined
     const freeShipping = shipping?.free_shipping === false ? false : null

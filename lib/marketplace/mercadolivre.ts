@@ -384,6 +384,21 @@ export async function mlUpdateItem(
   itemId: string,
   payload: Record<string, unknown>,
 ): Promise<MlListingItem> {
+  // Conta UP (user_product_seller): title é derivado do family_name — ML rejeita
+  // PUT com title em item que tem family_name (cause 374). Se payload tem title,
+  // busca o item primeiro pra checar e troca title → family_name se necessário.
+  let finalPayload = payload
+  if (payload.title) {
+    const raw = await (await fetch(`${ML_API}/items/${itemId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })).json() as Record<string, unknown>
+    if (raw.family_name) {
+      finalPayload = { ...payload, title: undefined }
+      delete finalPayload.title
+      finalPayload.family_name = payload.title
+    }
+  }
+
   const response = await fetch(`${ML_API}/items/${itemId}`, {
     method: 'PUT',
     headers: {
@@ -391,7 +406,7 @@ export async function mlUpdateItem(
       Accept: 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(finalPayload),
   })
 
   const data = (await response.json().catch(() => null)) as Record<string, unknown> | null
@@ -402,7 +417,7 @@ export async function mlUpdateItem(
       ? (data.cause as Array<Record<string, unknown>>)
           .map((c) => `${c.code ?? c.type}: ${c.message ?? ''}`.trim())
           .join(' | ')
-      : null
+      : typeof data?.cause === 'number' ? ` (cause ${data.cause})` : ''
     throw new MarketplaceError(causes ? `${message} — ${causes}` : message, response.status || 502)
   }
   return toListingItem(data)
@@ -495,13 +510,13 @@ function dimensionsFromAttributes(attributes: unknown): { heightCm: number; widt
   }
 }
 
-/** Detalhe completo pro modal de edicao — campos que a listagem (mlMyListings) nao traz. */
+/** Detalhe completo pro modal de edicao — campos que a listagem (mlMyListings) nao traz.
+ * Dimensoes: do PRODUTO (HEIGHT/WIDTH/LENGTH/WEIGHT attributes), nao da embalagem
+ * (SELLER_PACKAGE_*). O usuario edita as medidas fisicas do produto. */
 export async function mlGetListingDetail(accessToken: string, itemId: string): Promise<MlListingDetail> {
   const raw = await mlGetItemRaw(accessToken, itemId)
   const description = await mlGetItemDescription(accessToken, itemId)
-  const dims =
-    parseShippingDimensions((raw.shipping as Record<string, unknown> | undefined)?.dimensions) ??
-    dimensionsFromAttributes(raw.attributes)
+  const dims = dimsFromProductSpecs(raw.attributes) ?? dimensionsFromAttributes(raw.attributes)
   const pictures = Array.isArray(raw.pictures)
     ? (raw.pictures as Array<Record<string, unknown>>)
         .map((p) => ({ id: String(p.id ?? ''), url: String(p.secure_url ?? p.url ?? '') }))
@@ -509,6 +524,30 @@ export async function mlGetListingDetail(accessToken: string, itemId: string): P
     : []
 
   return { ...toListingItem(raw), description, ...dims, pictures }
+}
+
+/** Dimensoes do PRODUTO: atributos HEIGHT/WIDTH/LENGTH/WEIGHT (especificacoes fisicas).
+ * Diferente de SELLER_PACKAGE_* (embalagem de envio). */
+function dimsFromProductSpecs(attributes: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } | null {
+  if (!Array.isArray(attributes)) return null
+  const list = attributes as Array<Record<string, unknown>>
+  const numberFor = (id: string): number => {
+    const attr = list.find((a) => a.id === id)
+    if (!attr) return 0
+    const struct = (attr?.values as Array<Record<string, unknown>> | undefined)?.[0]?.struct as
+      | Record<string, unknown>
+      | undefined
+    const n = Number(struct?.number)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }
+  const result = {
+    heightCm: numberFor('HEIGHT'),
+    widthCm: numberFor('WIDTH'),
+    lengthCm: numberFor('LENGTH'),
+    weightGrams: numberFor('WEIGHT'),
+  }
+  // Se nenhum atributo de produto tem valor, retorna null (usa embalagem como fallback)
+  return result.heightCm > 0 || result.widthCm > 0 || result.lengthCm > 0 ? result : null
 }
 
 /**

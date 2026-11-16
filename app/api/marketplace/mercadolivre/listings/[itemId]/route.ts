@@ -111,6 +111,9 @@ export async function PUT(request: NextRequest, { params }: Context) {
     weightGrams !== undefined
   ) {
     payload.shipping = { dimensions: `${heightCm}x${widthCm}x${lengthCm},${weightGrams}` }
+    // NOTA: specs do produto (HEIGHT/WIDTH/LENGTH) no ML atualizam via card de
+    // Categorias/atributos — enviar attributes aqui substituiria o array inteiro
+    // (perderia BRAND, MATERIAL etc).
   }
 
   // Frete gratis editavel no modal — ML aceita shipping parcial no PUT.
