@@ -59,6 +59,7 @@ describe('mapOrder', () => {
             item: {
               title: 'Porta celular',
               seller_sku: 'SKU-1',
+              thumbnail: 'https://http2.mlstatic.com/x.jpg',
               variation_attributes: [{ name: 'Cor', value_name: 'Azul' }],
             },
           },
@@ -67,6 +68,41 @@ describe('mapOrder', () => {
     )
     expect(o.itens[0].variacao).toBe('Azul')
     expect(o.itens[0].sku).toBe('SKU-1')
+    expect(o.itens[0].thumbnail).toBe('https://http2.mlstatic.com/x.jpg')
+  })
+
+  it('thumbnail ausente no payload → null (enriquecimento local preenche depois)', () => {
+    const o = mapOrder(mlOrder())
+    expect(o.itens[0].thumbnail).toBeNull()
+  })
+
+  /** Enriquecimento de thumbnails por Product local (puro — maps prontos). */
+  it('attachThumbnails aplica foto do product por externalId', async () => {
+    const { attachThumbnails } = await import('@/lib/marketplace/orders')
+    const orders = [
+      mapOrder(mlOrder({ order_items: [{ quantity: 1, unit_price: 10, sale_fee: 1, item: { id: 'MLB111' } }, { quantity: 2, unit_price: 20, sale_fee: 2, item: { id: 'MLB222' } }] })),
+      mapOrder(mlOrder({ order_items: [{ quantity: 1, unit_price: 30, sale_fee: 3, item: { id: 'MLB333' } }] })),
+    ]
+    const listingToProduct = new Map([
+      ['MLB111', 'p1'],
+      ['MLB222', 'p1'],
+      ['MLB333', 'p2'],
+    ])
+    const productToThumb = new Map([
+      ['p1', 'https://img/p1.jpg'],
+      ['p2', 'https://img/p2.jpg'],
+    ])
+    attachThumbnails(orders, listingToProduct, productToThumb)
+    expect(orders[0].itens[0].thumbnail).toBe('https://img/p1.jpg')
+    expect(orders[0].itens[1].thumbnail).toBe('https://img/p1.jpg')
+    expect(orders[1].itens[0].thumbnail).toBe('https://img/p2.jpg')
+  })
+
+  it('attachThumbnails não sobrescreve thumbnail já presente', async () => {
+    const { attachThumbnails } = await import('@/lib/marketplace/orders')
+    const orders = [mapOrder(mlOrder({ order_items: [{ quantity: 1, unit_price: 10, sale_fee: 1, item: { id: 'MLB111', thumbnail: 'https://ml/x.jpg' } }] }))]
+    attachThumbnails(orders, new Map([['MLB111', 'p1']]), new Map([['p1', 'https://img/p1.jpg']]))
+    expect(orders[0].itens[0].thumbnail).toBe('https://ml/x.jpg')
   })
 
   it('sem shipping → envio null', () => {

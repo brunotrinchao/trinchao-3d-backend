@@ -2,6 +2,8 @@
  * Mappers puros tolerantes a campo ausente; shape da API do ML fica isolado aqui. */
 
 import { mlMyUserId, mlOrderById, mlOrdersSearch, mlShipment } from './mercadolivre'
+import { prisma } from '@/lib/prisma'
+import { storagePublicUrl } from '@/lib/storage'
 
 export type MlOrderItem = {
   titulo: string
@@ -9,6 +11,8 @@ export type MlOrderItem = {
   precoUnitario: number
   variacao?: string
   sku?: string
+  anuncioId?: string
+  thumbnail: string | null
 }
 
 export type MlOrder = {
@@ -90,6 +94,8 @@ export function mapOrder(raw: unknown): MlOrder {
         precoUnitario: Number(item.unit_price ?? 0),
         variacao: firstVariationLabel(it.variation_attributes),
         sku: it.seller_sku ? String(it.seller_sku) : undefined,
+        anuncioId: it.id ? String(it.id) : undefined,
+        thumbnail: it.thumbnail ? String(it.thumbnail) : null,
       }
     }),
     total: Number(o.total_amount ?? 0) || 0,
@@ -154,17 +160,80 @@ export function buildOrdersSearchParams(f: MlOrdersFilters): string {
   return p.toString()
 }
 
-/** Lista paginada de pedidos com filtros (passa direto na Orders API). */
+/** Aplica thumbnails por Product local (anuncioId → listing → product → 1a foto).
+ * Puro — buscas Prisma ficam em `withLocalThumbnails`; não sobrescreve thumbnail da API. */
+export function attachThumbnails(
+  orders: MlOrder[],
+  listingToProduct: Map<string, string>,
+  productToThumb: Map<string, string>,
+): void {
+  for (const order of orders) {
+    for (const item of order.itens) {
+      if (item.thumbnail) continue
+      const productId = item.anuncioId ? listingToProduct.get(item.anuncioId) : undefined
+      if (productId) item.thumbnail = productToThumb.get(productId) ?? null
+    }
+  }
+}
+
+/** Lista paginada de pedidos com filtros (passa direto na Orders API).
+ * Enriquece thumbnails: item → MarketplaceListing (externalId/externalIds) → Product → 1a foto. */
 export async function getMlOrders(
   accessToken: string,
   filters: Omit<MlOrdersFilters, 'seller'>,
 ): Promise<{ orders: MlOrder[]; total: number }> {
   const seller = await mlMyUserId(accessToken)
   const page = await mlOrdersSearch(accessToken, buildOrdersSearchParams({ seller, ...filters }))
+  const orders = (Array.isArray(page.results) ? page.results : []).map(mapOrder)
   return {
-    orders: (Array.isArray(page.results) ? page.results : []).map(mapOrder),
+    orders: await withLocalThumbnails(orders),
     total: Number(page.paging?.total ?? 0),
   }
+}
+
+/** Busca fotos dos produtos locais vinculados e aplica nos itens sem thumbnail.
+ * Falha de DB aqui não derruba a listagem — itens ficam sem foto. */
+async function withLocalThumbnails(orders: MlOrder[]): Promise<MlOrder[]> {
+  try {
+    const anuncioIds = [
+      ...new Set(
+        orders.flatMap((o) => o.itens.map((i) => i.anuncioId).filter((s): s is string => !!s)),
+      ),
+    ]
+    if (anuncioIds.length === 0) return orders
+
+    // externalId = item primário; externalIds (Json) = todas as variações criadas
+    const listings = await prisma.marketplaceListing.findMany({
+      where: {
+        OR: [
+          { externalId: { in: anuncioIds } },
+          ...anuncioIds.map((id) => ({ externalIds: { array_contains: id } })),
+        ],
+      },
+      select: { externalId: true, externalIds: true, productId: true },
+    })
+    const listingToProduct = new Map<string, string>()
+    for (const l of listings) {
+      if (l.externalId) listingToProduct.set(l.externalId, l.productId)
+      const extra = Array.isArray(l.externalIds) ? (l.externalIds as unknown[]) : []
+      for (const id of extra) if (typeof id === 'string') listingToProduct.set(id, l.productId)
+    }
+    const productIds = [...new Set(listingToProduct.values())]
+    if (productIds.length === 0) return orders
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, images: { take: 1, orderBy: { position: 'asc' } } },
+    })
+    const productToThumb = new Map(
+      products
+        .filter((p) => p.images[0]?.path)
+        .map((p) => [p.id, storagePublicUrl(p.images[0].path)]),
+    )
+    attachThumbnails(orders, listingToProduct, productToThumb)
+  } catch (err) {
+    console.error('orders: enriquecimento de thumbnails falhou:', err)
+  }
+  return orders
 }
 
 /** Detalhe de entrega de um pedido: order → shipping.id → /shipments/:id.
