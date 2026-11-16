@@ -32,6 +32,26 @@ describe('buildAffiliateLink', () => {
   })
 })
 
+describe('extractAffiliateTag', () => {
+  it('extrai matt_word/matt_tool de link social do ML', async () => {
+    const { extractAffiliateTag } = await import('@/lib/marketplace/affiliate')
+    const link =
+      'https://www.mercadolivre.com.br/social/brunotrinchao?matt_word=brunotrinchao&matt_tool=90432077&forceInApp=true&ref=token-aqui'
+    expect(extractAffiliateTag(link)).toBe('matt:brunotrinchao:90432077')
+  })
+
+  it('extrai tag simples de link com tag=', async () => {
+    const { extractAffiliateTag } = await import('@/lib/marketplace/affiliate')
+    expect(extractAffiliateTag('https://ml.com.br/p/MLB1?tag=SEUNOME-20')).toBe('SEUNOME-20')
+  })
+
+  it('link sem dados de afiliado → null', async () => {
+    const { extractAffiliateTag } = await import('@/lib/marketplace/affiliate')
+    expect(extractAffiliateTag('https://ml.com.br/p/MLB1')).toBeNull()
+    expect(extractAffiliateTag('lixo')).toBeNull()
+  })
+})
+
 describe('validateAffiliateTag', () => {
   it('reconhece tag simples (letras, números, hífen)', () => {
     expect(validateAffiliateTag('SEUNOME-20')).toEqual({ formato: 'tag' })
