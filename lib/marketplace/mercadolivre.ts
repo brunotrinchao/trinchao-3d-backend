@@ -164,7 +164,11 @@ export type MlRequiredAttribute = { id: string; name: string }
  */
 export async function mlRequiredCatalogAttributes(categoryId: string): Promise<MlRequiredAttribute[]> {
   const all = await mlCategoryAttributes(categoryId)
-  return all.filter((attr) => attr.catalogRequired).map(({ id, name }) => ({ id, name }))
+  // `catalog_required` = atributo de catalogo do ML; `required` = obrigatorio pro anuncio
+  // (ex: MODEL, DIAMETER). Ambos precisam estar preenchidos antes de publicar.
+  return all
+    .filter((attr) => attr.catalogRequired || attr.required)
+    .map(({ id, name }) => ({ id, name }))
 }
 
 /** Todos os atributos da categoria (id, nome, tags relevantes). Uma unica chamada serve
@@ -173,16 +177,17 @@ export async function mlRequiredCatalogAttributes(categoryId: string): Promise<M
  * (atributos com tag allow_variations definem a variacao real do anuncio). */
 export async function mlCategoryAttributes(
   categoryId: string,
-): Promise<Array<{ id: string; name: string; catalogRequired: boolean; allowVariations: boolean }>> {
+): Promise<Array<{ id: string; name: string; catalogRequired: boolean; required: boolean; allowVariations: boolean }>> {
   const data = (await mlFetch(`/categories/${categoryId}/attributes`)) as Array<{
     id: string
     name: string
-    tags?: { catalog_required?: boolean; allow_variations?: boolean }
+    tags?: { catalog_required?: boolean; required?: boolean; allow_variations?: boolean }
   }>
   return data.map((attr) => ({
     id: attr.id,
     name: attr.name,
     catalogRequired: Boolean(attr.tags?.catalog_required),
+    required: Boolean(attr.tags?.required),
     allowVariations: Boolean(attr.tags?.allow_variations),
   }))
 }

@@ -10,8 +10,7 @@ export async function GET(request: NextRequest) {
   if (!categoryId) return error('Parametro "categoryId" ausente', 400)
 
   try {
-    return json(await mlRequiredCatalogAttributes(categoryId))
-  } catch (err) {
+    return json(await mlRequiredCatalogAttributes(categoryId))  } catch (err) {
     if (err instanceof MarketplaceError) return error(err.message, err.status)
     console.error('GET /api/categories/mercadolivre/attributes failed:', err)
     return error('Nao foi possivel consultar os atributos da categoria', 502)
