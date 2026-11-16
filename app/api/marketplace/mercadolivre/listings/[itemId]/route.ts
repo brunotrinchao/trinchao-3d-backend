@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { error, json } from '@/lib/cors'
 import {
   mlDeleteItem,
+  mlGetItemRaw,
   mlGetListingDetail,
   mlUpdateItem,
   mlUpdateItemDescription,
@@ -113,6 +114,8 @@ export async function PUT(request: NextRequest, { params }: Context) {
   }
 
   // Frete gratis editavel no modal — ML aceita shipping parcial no PUT.
+  // PUT /items substitui o objeto shipping inteiro — sem `mode` o ML rejeita
+  // (BODY_INVALID_FIELDS). O `mode` atual e buscado dentro do try (credential).
   if (freeShipping !== undefined) {
     if (typeof freeShipping !== 'boolean') {
       return error('freeShipping invalido: envie boolean', 400)
@@ -140,6 +143,18 @@ export async function PUT(request: NextRequest, { params }: Context) {
 
   try {
     const credential = await getCredentialOrError()
+
+    // freeShipping: PUT /items substitui shipping inteiro — sem `mode` o ML rejeita
+    // (BODY_INVALID_FIELDS). Busca o mode atual e inclui no payload.shipping.
+    if (payload.shipping && typeof payload.shipping === 'object' && (payload.shipping as Record<string, unknown>).free_shipping !== undefined && !(payload.shipping as Record<string, unknown>).mode) {
+      try {
+        const raw = await mlGetItemRaw(credential.accessToken, itemId)
+        const currentMode = (raw.shipping as Record<string, unknown> | undefined)?.mode
+        if (currentMode) (payload.shipping as Record<string, unknown>).mode = currentMode
+      } catch {
+        // best-effort: sem o mode o ML pode rejeitar, mas o erro real volta do ML
+      }
+    }
 
     if (typeof description === 'string') {
       // Descricao nao sincroniza entre itens de um UP — aplica em todos.

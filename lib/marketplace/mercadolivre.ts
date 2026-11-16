@@ -396,8 +396,14 @@ export async function mlUpdateItem(
 
   const data = (await response.json().catch(() => null)) as Record<string, unknown> | null
   if (!response.ok || !data?.id) {
+    // ML manda cause[] com os campos rejeitados (ex: BODY_INVALID_FIELDS) — inclui no erro.
     const message = (data?.message as string | undefined) ?? `Mercado Livre respondeu ${response.status}`
-    throw new MarketplaceError(message, response.status || 502)
+    const causes = Array.isArray(data?.cause)
+      ? (data.cause as Array<Record<string, unknown>>)
+          .map((c) => `${c.code ?? c.type}: ${c.message ?? ''}`.trim())
+          .join(' | ')
+      : null
+    throw new MarketplaceError(causes ? `${message} — ${causes}` : message, response.status || 502)
   }
   return toListingItem(data)
 }
@@ -466,12 +472,20 @@ function parseShippingDimensions(raw: unknown): { heightCm: number; widthCm: num
 function dimensionsFromAttributes(attributes: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } {
   const zero = { heightCm: 0, widthCm: 0, lengthCm: 0, weightGrams: 0 }
   if (!Array.isArray(attributes)) return zero
+  const list = attributes as Array<Record<string, unknown>>
+
+  // SOMENTE SELLER_PACKAGE_*: sao as dimensoes da EMBALAGEM de envio.
+  // HEIGHT/WIDTH/LENGTH/WEIGHT sem o prefixo sao especificacoes do produto
+  // (ex: "a escultura tem 15cm de altura") — NAO sao dimensoes de envio.
+  // Usar essas aqui injetava valores errados no modal.
   const numberFor = (id: string): number => {
-    const attr = (attributes as Array<Record<string, unknown>>).find((a) => a.id === id)
+    const attr = list.find((a) => a.id === id)
+    if (!attr) return 0
     const struct = (attr?.values as Array<Record<string, unknown>> | undefined)?.[0]?.struct as
       | Record<string, unknown>
       | undefined
-    return Number(struct?.number ?? 0)
+    const fromStruct = Number(struct?.number)
+    return Number.isFinite(fromStruct) && fromStruct > 0 ? fromStruct : 0
   }
   return {
     heightCm: numberFor('SELLER_PACKAGE_HEIGHT'),
