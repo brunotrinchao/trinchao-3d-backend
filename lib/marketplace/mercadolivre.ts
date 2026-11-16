@@ -223,6 +223,56 @@ export async function mlMyUserId(accessToken: string): Promise<string> {
   return String(id)
 }
 
+/** Uma pagina de /orders/search (limit maximo 50 por chamada). */
+export type MlOrdersPage = {
+  paging: { total?: number; limit?: number; offset?: number }
+  results?: unknown[]
+}
+
+/** Pedidos do vendedor criados a partir de `fromISO`, ordenados por data, a partir de `offset`. */
+export async function mlMyOrders(
+  accessToken: string,
+  sellerId: string,
+  fromISO: string,
+  offset = 0,
+): Promise<MlOrdersPage> {
+  const url =
+    `/orders/search?seller=${encodeURIComponent(sellerId)}` +
+    `&order.date_created.from=${encodeURIComponent(fromISO)}` +
+    `&sort=date_desc&limit=50&offset=${offset}`
+  return (await mlFetch(url, accessToken)) as MlOrdersPage
+}
+
+/** Saldo da conta Mercado Pago vinculada ao seller (dinheiro de fato recebido).
+ * Docs: /users/{user_id}/mercadopago_account/balance. */
+export async function mlMpBalance(
+  accessToken: string,
+  userId: string,
+): Promise<{ disponivel: number; aLiberar: number; total: number }> {
+  const data = (await mlFetch(`/users/${userId}/mercadopago_account/balance`, accessToken)) as Record<
+    string,
+    unknown
+  >
+  const disponivel = Number(data.available_balance ?? 0)
+  const aLiberar = Number(data.unavailable_balance ?? 0)
+  return { disponivel, aLiberar, total: disponivel + aLiberar }
+}
+
+/** Busca de pedidos: recebe a query string pronta (seller, filtros, paginação). */
+export async function mlOrdersSearch(accessToken: string, query: string): Promise<MlOrdersPage> {
+  return (await mlFetch(`/orders/search?${query}`, accessToken)) as MlOrdersPage
+}
+
+/** Pedido individual por id (shape de /orders/:id inclui shipping completo). */
+export async function mlOrderById(accessToken: string, orderId: string): Promise<unknown> {
+  return mlFetch(`/orders/${encodeURIComponent(orderId)}`, accessToken)
+}
+
+/** Detalhe de envio: rastreio, método, endereço, status. */
+export async function mlShipment(accessToken: string, shipmentId: string): Promise<unknown> {
+  return mlFetch(`/shipments/${encodeURIComponent(shipmentId)}`, accessToken)
+}
+
 /** Cotação de envio ME2 por cobertura — resposta real de /users/{userId}/shipping_options/free.
  * Docs mostram exemplo com "options", mas a API atual devolve { coverage: { <área>: {...} } }:
  * list_cost = custo cheio; discount = subsídio do ML (rate/promoted_amount). */
