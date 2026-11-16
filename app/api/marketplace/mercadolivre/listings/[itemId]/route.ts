@@ -88,6 +88,7 @@ export async function PUT(request: NextRequest, { params }: Context) {
     widthCm,
     lengthCm,
     weightGrams,
+    freeShipping,
     syncPicturesFromProduct,
     pictureIds,
   } = (body as Record<string, unknown>) ?? {}
@@ -109,6 +110,16 @@ export async function PUT(request: NextRequest, { params }: Context) {
     weightGrams !== undefined
   ) {
     payload.shipping = { dimensions: `${heightCm}x${widthCm}x${lengthCm},${weightGrams}` }
+  }
+
+  // Frete gratis editavel no modal — ML aceita shipping parcial no PUT.
+  if (freeShipping !== undefined) {
+    if (typeof freeShipping !== 'boolean') {
+      return error('freeShipping invalido: envie boolean', 400)
+    }
+    const shipping = (payload.shipping as Record<string, unknown> | undefined) ?? {}
+    shipping.free_shipping = freeShipping
+    payload.shipping = shipping
   }
 
   if (pictureIds !== undefined) {

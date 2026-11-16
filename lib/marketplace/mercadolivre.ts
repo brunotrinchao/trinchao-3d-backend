@@ -403,8 +403,26 @@ export async function mlUpdateItem(
 }
 
 /** Descricao fica em endpoint separado — PUT /items/:id nao aceita esse campo. */
-export async function mlUpdateItemDescription(accessToken: string, itemId: string, text: string): Promise<void> {
-  const response = await fetch(`${ML_API}/items/${itemId}/description`, {
+/** Adiciona foto nova a um anuncio existente: ML baixa a imagem da URL publica
+ * (Supabase Storage — sem tunel). Retorna o array de pictures atualizado do item. */
+export async function mlAddItemPicture(
+  accessToken: string,
+  itemId: string,
+  sourceUrl: string,
+): Promise<void> {
+  const response = await fetch(`${ML_API}/pictures/${itemId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ source: sourceUrl }),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    const message = (body as Record<string, unknown> | null)?.message ?? `Mercado Livre respondeu ${response.status}`
+    throw new MarketplaceError(String(message), response.status || 502)
+  }
+}
+
+export async function mlUpdateItemDescription(accessToken: string, itemId: string, text: string): Promise<void> {  const response = await fetch(`${ML_API}/items/${itemId}/description`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
