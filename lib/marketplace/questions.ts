@@ -96,3 +96,51 @@ export async function answerQuestion(
 ): Promise<void> {
   await mlAnswerQuestion(accessToken, questionId, text)
 }
+
+/** Contexto do Product local vinculado ao itemId (p/ sugestão de resposta IA). */
+export async function getProductContextForItem(
+  itemId: string,
+): Promise<{
+  title: string
+  description: string
+  price: number | null
+  weightGrams: number | null
+  dimsCm: string | null
+  customFields: Array<{ key: string; value: string }>
+} | null> {
+  const listing = await prisma.marketplaceListing
+    .findFirst({
+      where: { OR: [{ externalId: itemId }, { externalIds: { array_contains: itemId } }] },
+      select: { productId: true },
+    })
+    .catch(() => null)
+  if (!listing) return null
+  const product = await prisma.product
+    .findUnique({
+      where: { id: listing.productId },
+      select: {
+        title: true,
+        description: true,
+        price: true,
+        weightGrams: true,
+        heightCm: true,
+        widthCm: true,
+        lengthCm: true,
+        customFields: { select: { key: true, value: true } },
+      },
+    })
+    .catch(() => null)
+  if (!product) return null
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+  return {
+    title: product.title,
+    description: product.description,
+    price: num(product.price),
+    weightGrams: num(product.weightGrams),
+    dimsCm:
+      product.heightCm && product.widthCm && product.lengthCm
+        ? `${product.heightCm}x${product.widthCm}x${product.lengthCm}`
+        : null,
+    customFields: product.customFields,
+  }
+}

@@ -273,10 +273,10 @@ export async function mlShipment(accessToken: string, shipmentId: string): Promi
   return mlFetch(`/shipments/${encodeURIComponent(shipmentId)}`, accessToken)
 }
 
-/** Perguntas não respondidas do vendedor (Questions API). */
+/** Perguntas não respondidas do vendedor (Questions API — /questions/search). */
 export async function mlQuestionsReceived(accessToken: string, sellerId: string): Promise<unknown> {
   return mlFetch(
-    `/users/${sellerId}/questions/received?filter=UNANSWERED&api_version=4`,
+    `/questions/search?seller_id=${encodeURIComponent(sellerId)}&filter=UNANSWERED&limit=50`,
     accessToken,
   )
 }
