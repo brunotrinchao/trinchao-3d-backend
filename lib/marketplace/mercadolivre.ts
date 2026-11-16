@@ -311,21 +311,39 @@ export type MlFee = {
   listingTypeId: string
   listingTypeName: string
   saleFeeAmount: number
+  /** Breakdown da comissao (docs: sale_fee_details) */
+  percentageFee: number
+  fixedFee: number
+  meliPercentageFee: number
+  financingAddOnFee: number
+  grossAmount: number
 }
 
-/** Comissao real do ML pra um preco+categoria+tipo de anuncio — numero exato, nao estimativa. */
+/** Comissao real do ML pra um preco+categoria+tipo de anuncio — numero exato, nao estimativa.
+ * Docs: /pt_br/comissao-por-vender. Response e ARRAY de listing types.
+ * Extrai o que casa com listing_type_id. Params opcionais: currency_id, logistic_type, shipping_modes. */
 export async function mlListingFee(
   accessToken: string,
   price: number,
   categoryId: string,
   listingTypeId: string,
 ): Promise<MlFee> {
-  const url = `/sites/${ML_SITE_ID}/listing_prices?price=${price}&category_id=${categoryId}&listing_type_id=${listingTypeId}`
-  const data = (await mlFetch(url, accessToken)) as Record<string, unknown>
+  const url = `/sites/${ML_SITE_ID}/listing_prices?price=${price}&category_id=${categoryId}&listing_type_id=${listingTypeId}&currency_id=BRL`
+  const data = (await mlFetch(url, accessToken)) as Array<Record<string, unknown>>
+  const entry = Array.isArray(data)
+    ? data.find((d) => String(d.listing_type_id ?? '') === listingTypeId) ?? data[0]
+    : (data as Record<string, unknown>)
+  if (!entry) throw new MarketplaceError(`ML nao retornou fee para ${listingTypeId}`, 502)
+  const details = (entry.sale_fee_details ?? {}) as Record<string, unknown>
   return {
-    listingTypeId: String(data.listing_type_id ?? listingTypeId),
-    listingTypeName: String(data.listing_type_name ?? listingTypeId),
-    saleFeeAmount: Number(data.sale_fee_amount ?? 0),
+    listingTypeId: String(entry.listing_type_id ?? listingTypeId),
+    listingTypeName: String(entry.listing_type_name ?? listingTypeId),
+    saleFeeAmount: Number(entry.sale_fee_amount ?? 0),
+    percentageFee: Number(details.percentage_fee ?? 0),
+    fixedFee: Number(details.fixed_fee ?? 0),
+    meliPercentageFee: Number(details.meli_percentage_fee ?? 0),
+    financingAddOnFee: Number(details.financing_add_on_fee ?? 0),
+    grossAmount: Number(details.gross_amount ?? 0),
   }
 }
 
@@ -470,15 +488,6 @@ export type MlListingDetail = MlListingItem & {
   lengthCm: number
   weightGrams: number
   pictures: MlPicture[]
-}
-
-/** "HxLxC,gramas" — mesmo formato usado no publish/sync. */
-function parseShippingDimensions(raw: unknown): { heightCm: number; widthCm: number; lengthCm: number; weightGrams: number } | null {
-  if (typeof raw !== 'string') return null
-  const match = raw.match(/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/)
-  if (!match) return null
-  const [, h, w, l, g] = match
-  return { heightCm: Math.round(Number(h)), widthCm: Math.round(Number(w)), lengthCm: Math.round(Number(l)), weightGrams: Math.round(Number(g)) }
 }
 
 /**
