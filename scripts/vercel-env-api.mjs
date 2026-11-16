@@ -4,8 +4,8 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 
 const which = process.argv[2]
-const BACK_ID = 'prj_uqf6TrWmO7vNqZZuDi8T2GoTpkSu'
-const FRONT_ID = 'prj_Er00sRuYUnBeG1mZas8IJoB694ec'
+const BACK_ID = 'prj_YZlEhJggYPA0F4IHG1zWFMw9SW4L'
+const FRONT_ID = 'prj_3NmreOeQBJwsrzW4a7Lw1GyCaiA8'
 const BACK = 'https://trinchao-3d-backend.vercel.app'
 const FRONT = 'https://trinchao-d3-front.vercel.app'
 const backendDir = '/home/brunotrinchao/Documentos/Bruno/trinchao-3d/backend'
