@@ -273,6 +273,37 @@ export async function mlShipment(accessToken: string, shipmentId: string): Promi
   return mlFetch(`/shipments/${encodeURIComponent(shipmentId)}`, accessToken)
 }
 
+/** Perguntas não respondidas do vendedor (Questions API). */
+export async function mlQuestionsReceived(accessToken: string, sellerId: string): Promise<unknown> {
+  return mlFetch(
+    `/users/${sellerId}/questions/received?filter=UNANSWERED&api_version=4`,
+    accessToken,
+  )
+}
+
+/** Responde uma pergunta via POST /answers (body JSON). */
+export async function mlAnswerQuestion(
+  accessToken: string,
+  questionId: string,
+  text: string,
+): Promise<void> {
+  const response = await fetch(`${ML_API}/answers`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ question_id: Number(questionId), text }),
+  })
+  const data = (await response.json().catch(() => null)) as Record<string, unknown> | null
+  if (!response.ok) {
+    const message =
+      (data as { message?: string } | null)?.message ?? `Mercado Livre respondeu ${response.status}`
+    throw new MarketplaceError(String(message), response.status || 502)
+  }
+}
+
 /** Cotação de envio ME2 por cobertura — resposta real de /users/{userId}/shipping_options/free.
  * Docs mostram exemplo com "options", mas a API atual devolve { coverage: { <área>: {...} } }:
  * list_cost = custo cheio; discount = subsídio do ML (rate/promoted_amount). */
@@ -398,7 +429,7 @@ export async function mlListingFee(
 }
 
 /** Detalhe de ate 20 itens por chamada (limite do endpoint multiget `/items`). */
-async function mlItemsByIds(ids: string[], accessToken: string): Promise<MlListingItem[]> {
+export async function mlItemsByIds(ids: string[], accessToken: string): Promise<MlListingItem[]> {
   const batchSize = 20
   const items: MlListingItem[] = []
   for (let i = 0; i < ids.length; i += batchSize) {
