@@ -104,17 +104,10 @@ export async function PUT(request: NextRequest, { params }: Context) {
     }
     payload.status = status
   }
-  if (
-    heightCm !== undefined &&
-    widthCm !== undefined &&
-    lengthCm !== undefined &&
-    weightGrams !== undefined
-  ) {
-    payload.shipping = { dimensions: `${heightCm}x${widthCm}x${lengthCm},${weightGrams}` }
-    // NOTA: specs do produto (HEIGHT/WIDTH/LENGTH) no ML atualizam via card de
-    // Categorias/atributos — enviar attributes aqui substituiria o array inteiro
-    // (perderia BRAND, MATERIAL etc).
-  }
+  // NOTA: dims de embalagem não são modificáveis em itens ativos (ML: field_not_updatable).
+  // Frontend mostra os valores atuais (readonly) mas não envia no PUT.
+  // Specs do produto (HEIGHT/WIDTH/LENGTH) atualizam via card de Categorias/atributos.
+  void heightCm; void widthCm; void lengthCm; void weightGrams;
 
   // Frete gratis editavel no modal — ML aceita shipping parcial no PUT.
   // PUT /items substitui o objeto shipping inteiro — sem `mode` o ML rejeita

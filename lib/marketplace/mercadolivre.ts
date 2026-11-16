@@ -384,18 +384,16 @@ export async function mlUpdateItem(
   itemId: string,
   payload: Record<string, unknown>,
 ): Promise<MlListingItem> {
-  // Conta UP (user_product_seller): title é derivado do family_name — ML rejeita
-  // PUT com title em item que tem family_name (cause 374). Se payload tem title,
-  // busca o item primeiro pra checar e troca title → family_name se necessário.
+  // Conta UP (user_product_seller): items com family_name rejeitam PUT com title
+  // (cause 374). Remove title do payload — os outros campos salvam normal.
   let finalPayload = payload
   if (payload.title) {
     const raw = await (await fetch(`${ML_API}/items/${itemId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })).json() as Record<string, unknown>
     if (raw.family_name) {
-      finalPayload = { ...payload, title: undefined }
+      finalPayload = { ...payload }
       delete finalPayload.title
-      finalPayload.family_name = payload.title
     }
   }
 

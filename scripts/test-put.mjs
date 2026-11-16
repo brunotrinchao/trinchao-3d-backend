@@ -1,4 +1,4 @@
-// Testa PUT com family_name (sem title) — UP model
+// Testa PUT com family_name alterado (sem title)
 import 'dotenv/config'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
@@ -11,17 +11,14 @@ const raw = await (await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
   headers: { Authorization: `Bearer ${cred.accessToken}` },
 })).json()
 
-console.log('family_name:', raw.family_name)
-console.log('title:', raw.title)
+console.log('family_name atual:', raw.family_name)
 
-// PUT sem title, só com os outros campos
+// Testa: PUT com family_name igual ao atual (no-op) + outros campos
 const body = {
+  family_name: raw.family_name,
   price: 24.9,
   available_quantity: 10,
-  shipping: {
-    free_shipping: true,
-    mode: raw.shipping?.mode,
-  },
+  shipping: { free_shipping: true, mode: raw.shipping?.mode },
 }
 const put = await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
   method: 'PUT',
@@ -29,10 +26,10 @@ const put = await fetch(`https://api.mercadolibre.com/items/${itemId}`, {
   body: JSON.stringify(body),
 })
 const putBody = await put.json()
-console.log('PUT sem title:', put.status)
+console.log('PUT com family_name:', put.status)
 if (!put.ok) {
   console.log('error:', putBody.message, '| cause:', putBody.cause)
 } else {
-  console.log('OK — sem title funciona')
+  console.log('OK — family_name aceito')
 }
 await prisma.$disconnect()
