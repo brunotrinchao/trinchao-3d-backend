@@ -31,6 +31,7 @@ const productBase = z.object({
   heightCm: dimensionInt,
   widthCm: dimensionInt,
   lengthCm: dimensionInt,
+  affiliateTag: z.string().trim().max(100).nullable().optional(),
   status: z.enum(['draft', 'ready', 'published']).optional(),
 })
 
