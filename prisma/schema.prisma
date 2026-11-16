@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  stock       Int
+  weightGrams Int
+  heightCm    Int
+  widthCm     Int
+  lengthCm    Int
+  status      String   @default("draft") // draft | ready | published
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  images              ProductImage[]
+  variations          ProductVariation[]
+  listings            MarketplaceListing[]
+  categoryMaps        ProductCategoryMap[]
+  marketplaceSettings ProductMarketplaceSettings[]
+  customFields        ProductCustomField[]
+}
+
+// Campos extras definidos pelo usuario pra caracteristicas que nao cabem no schema fixo
+// do Product (ex: "Materiais", "Capacidade", "Modelo"). No publish, cada campo e casado
+// com um atributo da categoria ML pelo nome (quando existir) e enviado como atributo.
+model ProductCustomField {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String // ex: "Materiais"
+  value     String  @db.Text
+
+  @@unique([productId, key])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  path      String // caminho relativo em disco, ex: uploads/<productId>/<file>
+  position  Int     @default(0)
+}
+
+model ProductVariation {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String // ex: "Cor: Azul / Tamanho: M"
+  sku       String
+  stock     Int
+}
+
+// mapeamento de categoria interna -> categoria em cada marketplace, por produto
+model ProductCategoryMap {
+  id           String  @id @default(cuid())
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketplace  String // "mercadolivre" | "shopee"
+  categoryId   String // id da categoria na taxonomia do marketplace
+  categoryPath String // nome legível, ex: "Eletrônicos > Celulares"
+  // Valores dos atributos obrigatorios de catalogo da categoria (ex: { "BRAND": "Generica" }).
+  // Formato livre porque cada categoria do marketplace exige um conjunto diferente de atributos.
+  attributes   Json?
+
+  @@unique([productId, marketplace])
+}
+
+model MarketplaceListing {
+  id           String    @id @default(cuid())
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketplace  String // "mercadolivre" | "shopee"
+  externalId   String? // id do anúncio retornado pela API do marketplace
+  // Modelo User Products (tag user_product_seller): 1 item ML por variacao — externalId
+  // guarda o item primario, externalIds guarda todos os ids criados.
+  externalIds  Json?
+  status       String    @default("pending") // pending | published | failed
+  errorMessage String?   @db.Text
+  publishedAt  DateTime?
+
+  @@unique([productId, marketplace])
+}
+
+// Dados que podem ser diferentes por marketplace (o resto do Product e compartilhado).
+// Campo null = usa o valor do Product. Linha so existe quando o usuario opta por personalizar.
+model ProductMarketplaceSettings {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  marketplace String // "mercadolivre" | "shopee"
+
+  title       String?
+  description String? @db.Text
+  price       Decimal? @db.Decimal(10, 2)
+
+  // ML: classic | gold_special | premium — afeta a comissao. null = padrao do app (gold_special)
+  listingTypeId String?
+  // input manual do usuario pra estimar "quanto vou receber": custo real do frete gratis varia
+  // por destino do comprador, nao da pra calcular exato sem o pedido acontecer.
+  estimatedShippingCents Int?
+  // null = frete gratis (default do ML); false = frete por conta do comprador
+  freeShipping Boolean?
+
+  @@unique([productId, marketplace])
+}
+
+model MarketplaceCredential {
+  id           String    @id @default(cuid())
+  marketplace  String    @unique // "mercadolivre" | "shopee"
+  accessToken  String    @db.Text
+  refreshToken String?   @db.Text
+  shopId       String? // exigido pela Shopee em toda chamada autenticada; null para outros marketplaces
+  expiresAt    DateTime?
+}
