@@ -84,6 +84,7 @@ if (which === 'backend') {
     { key: 'GEMINI_API_KEY', value: backendEnv.GEMINI_API_KEY },
     { key: 'GEMINI_MODEL', value: backendEnv.GEMINI_MODEL || 'gemini-3.6-flash' },
     { key: 'SUPABASE_URL', value: backendEnv.SUPABASE_URL },
+    { key: 'SUPABASE_SERVICE_KEY', value: backendEnv.SUPABASE_SERVICE_KEY },
     { key: 'MERCADOLIVRE_REDIRECT_URI', value: `${BACK}/api/auth/mercadolivre/callback` },
     { key: 'PUBLIC_BASE_URL', value: BACK },
     { key: 'FRONTEND_ORIGIN', value: FRONT },

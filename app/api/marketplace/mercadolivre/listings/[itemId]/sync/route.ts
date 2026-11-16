@@ -8,8 +8,9 @@ import {
 } from '@/lib/marketplace/mercadolivre'
 import { MarketplaceError } from '@/lib/marketplace/types'
 import { getFreshMlCredential } from '@/lib/marketplace/mlCredential'
+import { imageObjectPath, storageUpload } from '@/lib/storage'
 import { prisma } from '@/lib/prisma'
-import { resolveUploadPath, safeFilename } from '@/lib/uploads'
+import { safeFilename } from '@/lib/uploads'
 
 export { OPTIONS } from '@/lib/cors'
 
@@ -31,13 +32,10 @@ function parseDimensions(raw: unknown): { heightCm: number; widthCm: number; len
 }
 
 /** Baixa as fotos do anuncio do ML e salva como ProductImage, mesma convencao do upload manual.
- * Melhor esforco: uma foto que falhar nao aborta a sincronizacao (produto ja foi criado). */
+ * Melhor esforco: uma foto que falhar nao aborta a sincronizacao (produto ja foi criado).
+ * Arquivos vao pro Supabase Storage (bucket `products`). */
 async function importPictures(productId: string, pictures: unknown): Promise<number> {
   if (!Array.isArray(pictures) || pictures.length === 0) return 0
-
-  const dir = resolveUploadPath(productId)
-  if (!dir) return 0
-  await fs.mkdir(dir, { recursive: true })
 
   let position = 0
   let imported = 0
@@ -49,9 +47,10 @@ async function importPictures(productId: string, pictures: unknown): Promise<num
       if (!response.ok) continue
       const ext = path.extname(new URL(url).pathname) || '.jpg'
       const filename = `${Date.now()}-${position}-${safeFilename(`ml${ext}`)}`
-      await fs.writeFile(path.join(dir, filename), Buffer.from(await response.arrayBuffer()))
+      const objectPath = imageObjectPath(productId, filename)
+      await storageUpload(objectPath, Buffer.from(await response.arrayBuffer()))
       await prisma.productImage.create({
-        data: { productId, path: `uploads/${productId}/${filename}`, position },
+        data: { productId, path: objectPath, position },
       })
       position += 1
       imported += 1

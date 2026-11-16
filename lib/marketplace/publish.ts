@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getFreshMlCredential } from './mlCredential'
+import { storagePublicUrl } from '@/lib/storage'
 import { MarketplaceError } from './types'
 
 export type Marketplace = 'mercadolivre' | 'shopee'
@@ -100,7 +101,9 @@ export function recordFailure(productId: string, marketplace: Marketplace, error
   })
 }
 
-/** URL publica de uma imagem, usada nos payloads dos marketplaces. */
+/** URL publica de uma imagem pro payload do marketplace. Imagens no Supabase Storage
+ * (`products/...`) tem URL publica direta — sem tunel, sem PUBLIC_BASE_URL. */
 export function imageUrl(origin: string, relativePath: string): string {
+  if (relativePath.startsWith('products/')) return storagePublicUrl(relativePath)
   return new URL(`/${relativePath.replace(/^\/+/, '')}`, origin).toString()
 }

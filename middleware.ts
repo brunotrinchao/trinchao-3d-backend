@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { corsHeaders } from '@/lib/cors'
 import { bearerFromRequest, isPublicApiPath, verifySupabaseToken } from '@/lib/auth'
 
 /**
@@ -14,10 +15,11 @@ export async function middleware(request: NextRequest) {
 
   const userId = await verifySupabaseToken(bearerFromRequest(request))
   if (!userId) {
-    return NextResponse.json(
-      { error: 'Nao autenticado — faca login no app' },
-      { status: 401 },
-    )
+    // 401 com CORS: sem isso o browser trata como erro de CORS (middleware roda fora
+    // das rotas que já anexam corsHeaders()).
+    const response = NextResponse.json({ error: 'Nao autenticado — faca login no app' }, { status: 401 })
+    for (const [key, value] of Object.entries(corsHeaders())) response.headers.set(key, value)
+    return response
   }
 
   // user id disponível pra handlers via header (single-user hoje; multiuser no futuro).
