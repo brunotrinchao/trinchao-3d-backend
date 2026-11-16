@@ -131,6 +131,7 @@ export type MlListingItem = {
   title: string
   price: number
   availableQuantity: number
+  soldQuantity: number
   status: string
   thumbnail: string | null
   permalink: string | null
@@ -290,6 +291,7 @@ function toListingItem(raw: Record<string, unknown>): MlListingItem {
     title: String(raw.title ?? ''),
     price: Number(raw.price ?? 0),
     availableQuantity: Number(raw.available_quantity ?? 0),
+    soldQuantity: Number(raw.sold_quantity ?? 0),
     status: String(raw.status ?? 'unknown'),
     thumbnail: (raw.thumbnail as string | undefined) ?? null,
     permalink: (raw.permalink as string | undefined) ?? null,
