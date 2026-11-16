@@ -97,3 +97,4 @@ O Mercado Livre segue o mesmo principio na publicacao: sem credencial salva,
   client usa o driver adapter `@prisma/adapter-mariadb`. O client e instanciado de forma
   preguicosa em `lib/prisma.ts` para que `next build` nao exija `DATABASE_URL`.
 - Sem autenticacao de usuario e sem sync reverso de status, conforme o contrato.
+# trinchao-3d-backend
