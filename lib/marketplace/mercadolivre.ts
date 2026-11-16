@@ -195,6 +195,20 @@ export async function mlUserTags(accessToken: string): Promise<string[]> {
   return Array.isArray(data.tags) ? data.tags.map(String) : []
 }
 
+/** Subcategorias de uma categoria (children_categories) — navegacao hierarquica. */
+export type MlCategoryNode = { id: string; name: string; hasChildren: boolean }
+
+export async function mlCategoryChildren(categoryId: string, accessToken?: string): Promise<MlCategoryNode[]> {
+  const data = (await mlFetch(`/categories/${categoryId}`, accessToken)) as {
+    children_categories?: Array<{ id: string | number; name: string }>
+  }
+  return (data.children_categories ?? []).map((child) => ({
+    id: String(child.id),
+    name: child.name,
+    hasChildren: true, // ML não marca folha aqui — detectamos com 2ª chamada se precisar
+  }))
+}
+
 export async function mlMyUserId(accessToken: string): Promise<string> {
   const data = (await mlFetch('/users/me', accessToken)) as Record<string, unknown>
   const id = data.id

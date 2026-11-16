@@ -75,20 +75,38 @@ export async function POST(request: NextRequest, { params }: Context) {
   try {
     const categoryAttrs = await mlCategoryAttributes(categoryMap.categoryId)
     const required = categoryAttrs.filter((attr) => attr.catalogRequired)
-    const missing = required.filter((attr) => !attributeValues[attr.id]?.trim())
-    if (missing.length > 0) {
-      const names = missing.map((attr) => `${attr.name} (${attr.id})`).join(', ')
-      return error(
-        `Categoria "${categoryMap.categoryPath}" exige atributos de catalogo ainda nao preenchidos: ${names}. Preencha no card de Categorias antes de publicar.`,
-        422,
-      )
-    }
-    catalogAttributes = required.map((attr) => ({ id: attr.id, value_name: attributeValues[attr.id] }))
 
     // Campos customizados do produto viram atributos do anuncio quando casam com um atributo
     // da categoria pelo nome (sem acento/caixa, tolerando plural — ex: "Materiais" -> MATERIAL).
-    // Campo sem correspondente fica de fora (nao existe pra que inferir id sozinho).
+    // Roda ANTES do check de faltantes: "Marca"/"Material" nos campos personalizados satisfazem
+    // atributos catalog_required da categoria (mesma satisfacao do card de Categorias).
     const attrVariants = categoryAttrs.map((attr) => ({ attr, variants: nameVariants(attr.name) }))
+    const satisfied = new Set<string>()
+    const fieldSourced: Record<string, string> = {}
+    for (const field of product.customFields) {
+      const fieldVariants = nameVariants(field.key)
+      const match = attrVariants.find(
+        ({ variants }) => variants.some((v) => fieldVariants.includes(v)),
+      )
+      if (!match || satisfied.has(match.attr.id)) continue
+      satisfied.add(match.attr.id)
+      fieldSourced[match.attr.id] = field.value
+    }
+
+    const missing = required.filter((attr) => !attributeValues[attr.id]?.trim() && !fieldSourced[attr.id]?.trim())
+    if (missing.length > 0) {
+      const names = missing.map((attr) => `${attr.name} (${attr.id})`).join(', ')
+      return error(
+        `Categoria "${categoryMap.categoryPath}" exige atributos de catalogo ainda nao preenchidos: ${names}. Preencha no card de Categorias ou nos campos personalizados do produto antes de publicar.`,
+        422,
+      )
+    }
+    catalogAttributes = required.map((attr) => ({
+      id: attr.id,
+      value_name: attributeValues[attr.id]?.trim() || fieldSourced[attr.id],
+    }))
+
+    // Outros atributos casados (não-required) continuam entrando como attributes do anuncio.
     const usedIds = new Set(catalogAttributes.map((attr) => String(attr.id)))
     for (const field of product.customFields) {
       const fieldVariants = nameVariants(field.key)
