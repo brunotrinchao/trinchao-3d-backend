@@ -121,3 +121,9 @@ model MarketplaceCredential {
   shopId       String? // exigido pela Shopee em toda chamada autenticada; null para outros marketplaces
   expiresAt    DateTime?
 }
+
+// Configurações globais do app (single-user): uma linha por chave (ex: "affiliateTag").
+model AppSetting {
+  key   String @id
+  value String @db.Text
+}
