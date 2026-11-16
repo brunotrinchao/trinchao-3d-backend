@@ -32,8 +32,19 @@ export async function GET(
     }
     if (!upstream.ok) {
       const body = (await upstream.json().catch(() => null)) as { message?: string } | null
-      const message = body?.message ?? `Mercado Livre respondeu ${upstream.status}`
-      return error(String(message), upstream.status || 502)
+      const mlMessage = String(body?.message ?? `Mercado Livre respondeu ${upstream.status}`)
+      // Estados do shipment onde a etiqueta ainda não existe — mensagem orientável
+      const stateHint: Record<string, string> = {
+        invoice_pending:
+          'Etiqueta indisponível: o envio está aguardando faturamento (invoice_pending). Emite a nota/fatura e tenta de novo.',
+        pending: 'Etiqueta indisponível: envio ainda não foi processado pelo ML.',
+        cancelled: 'Etiqueta indisponível: o envio foi cancelado.',
+      }
+      const shipmentState = mlMessage.match(/status is ([a-z_]+)/i)?.[1]
+      const friendly =
+        (shipmentState && stateHint[shipmentState]) ??
+        `${mlMessage} — a etiqueta pode não estar disponível ainda para este envio`
+      return error(friendly, upstream.status === 422 || upstream.status === 400 ? 409 : upstream.status)
     }
 
     return new Response(upstream.body, {
