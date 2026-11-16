@@ -4,23 +4,20 @@ const positiveInt = z.coerce.number().int().min(0)
 // Dimensao fisica: marketplaces (ML) exigem > 0 pra calcular frete. Estoque pode ser 0 (sem estoque).
 const dimensionInt = z.coerce.number().int().min(1)
 
-// Descricao de anuncio: 20 a 25 linhas (linhas nao vazias). Unica fonte desse limite —
+// Descricao de anuncio: ate 25 linhas (linhas nao vazias). Unica fonte desse limite —
 // o prompt da IA (lib/ai/gemini.ts) e o contador do formulario leem daqui.
-export const DESCRIPTION_LINES = { min: 20, max: 25 } as const
+export const DESCRIPTION_LINES = { max: 25 } as const
 
 export function countDescriptionLines(description: string): number {
   return description.trim().split(/\n+/).filter((line) => line.trim().length > 0).length
 }
 
 export const descriptionLinesError = () =>
-  `A descricao deve ter de ${DESCRIPTION_LINES.min} a ${DESCRIPTION_LINES.max} linhas`
+  `A descricao deve ter no maximo ${DESCRIPTION_LINES.max} linhas`
 
 const descriptionLinesCheck = z
   .string()
   .min(1)
-  .refine((value) => countDescriptionLines(value) >= DESCRIPTION_LINES.min, {
-    message: `A descricao deve ter no minimo ${DESCRIPTION_LINES.min} linhas`,
-  })
   .refine((value) => countDescriptionLines(value) <= DESCRIPTION_LINES.max, {
     message: `A descricao deve ter no maximo ${DESCRIPTION_LINES.max} linhas`,
   })

@@ -30,7 +30,7 @@ Regras obrigatorias:
 - Nao invente material, cor, marca, garantia ou caracteristica que nao foi informada acima. Fale so do que da pra inferir do titulo, das dimensoes e das caracteristicas informadas pelo vendedor (quando houver).
 - Alem de descrever o produto, PONTUE as caracteristicas dele: cada caracteristica informada pelo vendedor (quando houver) citada explicitamente com o valor dela, e o que da pra inferir do titulo e das dimensoes (capacidade/porte que o tamanho sugere, formato/modelo aparente, uso tipico pra esse tipo de item, facilidade de limpeza/transporte). Cada caracteristica ganha um paragrafo curto proprio, sempre como inferencia honesta (ex: "pelo porte compacto...") — nunca como fato que voce nao tem.
 - Pode mencionar que e um produto impresso em 3D, ja que e o tipo de produto vendido nessa loja.
-- Extensao fixa: entre 20 e 25 linhas (contando linhas nao vazias), em paragrafos curtos, cobrindo o que e, caracteristicas pontuadas, pra que serve, por que comprar, tamanho/peso, cuidados de uso e embalagem/entrega.
+- Extensao: ate 25 linhas (contando linhas nao vazias), em paragrafos curtos, cobrindo o que e, caracteristicas pontuadas, pra que serve, por que comprar, tamanho/peso, cuidados de uso e embalagem/entrega.
 - Sem emojis.
 - Devolva so o texto da descricao — sem titulo, sem aspas, sem comentario antes ou depois.`
 }
