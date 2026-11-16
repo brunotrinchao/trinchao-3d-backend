@@ -24,6 +24,12 @@ export async function GET(
     }
 
     const upstream = await fetchShipmentLabel(credential.accessToken, String(shipping.id))
+    if (upstream.status === 429) {
+      return error(
+        'Mercado Livre limitou as consultas de etiqueta agora — tente de novo em alguns segundos',
+        429,
+      )
+    }
     if (!upstream.ok) {
       const body = (await upstream.json().catch(() => null)) as { message?: string } | null
       const message = body?.message ?? `Mercado Livre respondeu ${upstream.status}`
@@ -39,7 +45,13 @@ export async function GET(
       },
     })
   } catch (err) {
-    if (err instanceof MarketplaceError) return error(err.message, err.status)
+    if (err instanceof MarketplaceError) {
+      const friendly =
+        err.status === 429
+          ? 'Mercado Livre limitou as consultas agora — tente de novo em alguns segundos'
+          : err.message
+      return error(friendly, err.status)
+    }
     console.error('GET orders/:id/label failed:', err)
     return error('Nao foi possivel obter a etiqueta no Mercado Livre', 502)
   }
