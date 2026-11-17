@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { error } from '@/lib/cors'
 import { fetchShipmentLabel } from '@/lib/marketplace/labels'
-import { mlOrderById } from '@/lib/marketplace/mercadolivre'
+import { mlOrderById, mlShipment } from '@/lib/marketplace/mercadolivre'
 import { getFreshMlCredential } from '@/lib/marketplace/mlCredential'
 import { MarketplaceError } from '@/lib/marketplace/types'
 
@@ -21,6 +21,11 @@ export async function GET(
     const shipping = (order.shipping ?? null) as Record<string, unknown> | null
     if (!shipping || shipping.id === undefined || shipping.id === null) {
       return error('Pedido sem envio — etiqueta indisponível', 404)
+    }
+
+    const shipment = (await mlShipment(credential.accessToken, String(shipping.id))) as Record<string, unknown>
+    if (shipment.tracking_number) {
+      return error('Pedido já enviado — etiqueta indisponível', 409)
     }
 
     const upstream = await fetchShipmentLabel(credential.accessToken, String(shipping.id))
